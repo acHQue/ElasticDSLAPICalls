@@ -1,0 +1,126 @@
+
+POST /winlogbeat-2024.07.12/_rollover
+
+
+PUT /winlogbeat-2024.07.11
+{
+  "mappings": {
+    "properties": {
+      "winlog.winlog.event_data.DestPort": {
+        "type": "ip"
+      }
+}
+}
+}
+
+POST /_aliases
+{
+  "actions": [
+    {
+      "add": {
+        "index": "winlogbeat-2024.07.12",
+        "alias": "winlogbeat-write"
+      }
+    }
+  ]
+}
+
+POST /winlogbeat-write/_rollover
+{
+  "conditions": {
+    "max_age": "1d",
+    "max_docs": 9999,
+    "max_size": "5gb"
+  }
+}
+
+
+PUT /winlogbeat-000001
+{
+  "aliases": {
+    "winlogbeat-write": {
+      "is_write_index": true
+    }
+  }
+}
+
+
+POST /winlogbeat-write/_rollover
+{
+  "conditions": {
+    "max_age": "1d",
+    "max_docs": 9999,
+    "max_size": "5gb"
+  }
+}
+
+
+GET /_cat/indices?v
+
+
+PUT /_template/winlogbeat_template
+{
+  "index_patterns": ["winlogbeat-*"],
+  "settings": {
+    "index.default_pipeline": "ip-port-conversion-pipeline-winlogbeat",
+    "index.number_of_shards": 1,
+    "index.number_of_replicas": 0
+  },
+  "mappings": {
+    "properties": {
+      "host": {
+        "properties": {
+          "ip": {
+            "type": "ip"
+          }
+        }
+      },
+      "winlog": {
+        "properties": {
+          "winlog": {
+            "properties": {
+              "@timestamp": {
+                "type": "date"
+              },
+              "event_data": {
+                "properties": {
+                  "SourceAddress": {
+                    "type": "ip"
+                  },
+                  "DestAddress": {
+                    "type": "ip"
+                  },
+                  "SourcePort": {
+                    "type": "integer"
+                  },
+                  "DestPort": {
+                    "type": "integer"
+                  },
+                  "ProcessID": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          },
+          "process": {
+            "properties": {
+              "pid": {
+                "type": "integer"
+              },
+              "thread": {
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+
