@@ -1,0 +1,66 @@
+#Index Template
+
+PUT /_template/winlogbeat_template
+{
+  "index_patterns": ["winlogbeat-*"],
+  "settings": {
+    "index.default_pipeline": "ip-port-conversion-pipeline-winlogbeat",
+    "index.number_of_shards": 1,
+    "index.number_of_replicas": 0
+  },
+  "mappings": {
+    "properties": {
+      "host": {
+        "properties": {
+          "ip": {
+            "type": "ip"
+          }
+        }
+      },
+      "winlog": {
+        "properties": {
+          "winlog": {
+            "properties": {
+              "@timestamp": {
+                "type": "date"
+              },
+              "event_data": {
+                "properties": {
+                  "SourceAddress": {
+                    "type": "ip"
+                  },
+                  "DestAddress": {
+                    "type": "ip"
+                  },
+                  "SourcePort": {
+                    "type": "integer"
+                  },
+                  "DestPort": {
+                    "type": "integer"
+                  },
+                  "ProcessID": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          },
+          "process": {
+            "properties": {
+              "pid": {
+                "type": "integer"
+              },
+              "thread": {
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
