@@ -1,0 +1,633 @@
+# Final
+
+# 1
+# CREATE AN INDEX WITH ZERO REPLICAS
+
+DELETE /temp-index
+
+#PUT /temp-index/_settings
+#{
+#  "index": {
+#    "number_of_replicas": 0
+#  }
+#}
+
+
+# 1.1
+#Apply the convertions of data types
+PUT /temp-index
+{
+  "settings": {
+    "index.default_pipeline": "ip-port-conversion-pipeline",
+    "index.number_of_shards": 1,
+    "index.number_of_replicas": 0
+  },
+  "mappings": {
+    "properties": {
+      "winlog": {
+        "properties": {
+          "event_data": {
+            "properties": {
+              "SourceAddress": { "type": "ip" },
+              "DestAddress": { "type": "ip" },
+              "SourcePort": { "type": "integer" },
+              "DestPort": { "type": "integer" }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+#remove association before deleting, because it is defult to temp-index
+PUT /temp-index/_settings
+{
+  "index.default_pipeline": null
+}
+
+#delete ingest pipeline
+DELETE _ingest/pipeline/ip-port-conversion-pipeline
+
+#create ingest mappings
+PUT _ingest/pipeline/ip-port-conversion-pipeline
+{
+  "description": "Convert IP addresses and ports",
+  "processors": [
+    {
+      "convert": {
+        "field": "winlog.event_data.SourceAddress",
+        "type": "ip"
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.event_data.DestAddress",
+        "type": "ip"
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.event_data.SourcePort",
+        "type": "integer"
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.event_data.DestPort",
+        "type": "integer"
+      }
+    }
+  ]
+}
+
+
+# Set ingest pipeline  to defult for temp-index
+
+PUT /temp-index/_settings
+{
+  "index.default_pipeline": "ip-port-conversion-pipeline"
+}
+
+
+# create index with replicas and mapping with data types
+
+PUT /temp-index
+{
+  "settings": {
+    "index.default_pipeline": "ip-port-conversion-pipeline",
+    "index.number_of_shards": 1,
+    "index.number_of_replicas": 0
+  },
+  "mappings": {
+    "properties": {
+      "winlog": {
+        "properties": {
+          "event_data": {
+            "properties": {
+              "SourceAddress": { "type": "ip" },
+              "DestAddress": { "type": "ip" },
+              "SourcePort": { "type": "integer" },
+              "DestPort": { "type": "integer" }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+
+# 1.2 Verify
+GET temp-index/_mapping
+
+
+# 2
+#
+# Stop the logs
+#
+# Pause the Windows VM or Stop Logstash Service
+
+# 3
+#COPY ONE INDEX TO ANOTHER
+POST _reindex
+{
+  "source": {
+    "index": "winlogbeat-2024.07.11*"
+  },
+  "dest": {
+    "index": "temp-index"
+  }
+}
+
+
+
+#####################################################
+
+#Verify Index
+
+#####################################################
+GET temp-index/_count
+GET temp-index/_search
+{
+  "size": 10,
+  "query": {
+    "match_all": {}
+  }
+}
+
+GET winlogbeat-2024.07.11/_count
+GET winlogbeat-2024.07.11/_search
+{
+  "size": 10,
+  "query": {
+    "match_all": {}
+  }
+}
+
+GET winlogbeat-2024.07.11*/_search
+{
+  "query": {
+    "match_all": {}
+  },
+  "size": 1
+}
+
+GET winlogbeat-2024.07.11*/_search
+{
+  "query": {
+    "query_string": {
+      "query": "*destination*"
+    }
+  },
+  "size": 1
+}
+
+GET winlogbeat-2024.07.11*/_search
+{
+  "query": {
+    "query_string": {
+      "query": "*destination*",
+      "fields": ["<specific_field>"]
+    }
+  },
+  "size": 1
+}
+
+GET winlogbeat-2024.07.11*/_search
+{
+  "query": {
+    "query_string": {
+      "query": "*",
+      "fields": ["winlog.winlog.event_data.SourceAddress"]
+    }
+  },
+  "size": 1
+}
+
+GET temp-index/_search
+{
+  "query": {
+    "query_string": {
+      "query": "*",
+      "fields": ["winlog.winlog.event_data.SourceAddress"]
+    }
+  },
+  "size": 1
+}
+
+
+#################################################################
+
+
+# 4
+# Delete old winlogbeat-yyyy.mm.dd
+
+#DELETE /temp-index
+#DELETE /temp-index-1
+DELETE /winlogbeat-2024.07.11
+
+# 5
+# Create new index for winlogbeat-yyyy.mm.dd
+
+PUT /winlogbeat-2024.07.11/_settings
+{
+  "index": {
+    "number_of_replicas": 0
+  }
+}
+
+# 6
+# Create ingest pipeline template
+
+# The ip-port-conversion-pipeline in the name/id and is found in. stack man > ingest pipeline
+PUT _ingest/pipeline/ip-port-conversion-pipeline
+{
+  "description": "Convert IP addresses and ports",
+  "processors": [
+    {
+      "convert": {
+        "field": "winlog.winlog.event_data.SourceAddress",
+        "type": "ip"
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.winlog.event_data.DestAddress",
+        "type": "ip"
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.winlog.event_data.SourcePort",
+        "type": "integer"
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.winlog.event_data.DestPort",
+        "type": "integer"
+      }
+    }
+  ]
+}
+
+
+#7 Create index template
+
+PUT _index_template/winlogbeat_template
+{
+  "index_patterns": ["winlogbeat-*"],
+  "template": {
+    "settings": {
+      "index.default_pipeline": "ip-port-conversion-pipeline",
+      "index.number_of_shards": 1,
+      "index.number_of_replicas": 0
+    },
+    "mappings": {
+      "properties": {
+        "winlog": {
+          "properties": {
+            "event_data": {
+              "properties": {
+                "SourceAddress": {
+                  "type": "ip"
+                },
+                "DestAddress": {
+                  "type": "ip"
+                },
+                "SourcePort": {
+                  "type": "integer"
+                },
+                "DestPort": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+#7.1 delete old winlogbeat index
+DELETE /winlogbeat-2024.07.11
+
+#7.2 Create the new Winlogbeat-yyyy.mm.dd index
+
+PUT /winlogbeat-2024.07.11
+{
+  "settings": {
+    "index.default_pipeline": "ip-port-conversion-pipeline",
+    "index.number_of_shards": 1,
+    "index.number_of_replicas": 0
+  },
+  "mappings": {
+    "properties": {
+      "winlog": {
+        "properties": {
+          "event_data": {
+            "properties": {
+              "SourceAddress": { "type": "ip" },
+              "DestAddress": { "type": "ip" },
+              "SourcePort": { "type": "integer" },
+              "DestPort": { "type": "integer" }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# 8
+# Set the default index ingest pipeline
+
+PUT /winlogbeat-2024.07.11/_doc?pipeline=winlogbeat-ingest-pipline
+
+# 9
+# Copy temp-index data into winlogbeat-yyyy-mm-dd
+
+POST _reindex
+{
+  "source": {
+    "index": "temp-index"
+  },
+  "dest": {
+    "index": "winlogbeat-20240.7.11*"
+  }
+}
+
+
+# 10 
+# Restart the logs
+
+
+############################################################################################
+############################################################################################
+
+#del index
+DELETE /temp-index
+
+#create the index with the extra nesting
+
+PUT /temp-index
+{
+  "settings": {
+    "index.default_pipeline": "ip-port-conversion-pipeline",
+    "index.number_of_shards": 1,
+    "index.number_of_replicas": 0
+  },
+  "mappings": {
+    "properties": {
+      "winlog": {
+        "properties": {
+          "winlog": {
+            "properties": {
+              "event_data": {
+                "properties": {
+                  "SourceAddress": { "type": "ip" },
+                  "DestAddress": { "type": "ip" },
+                  "SourcePort": { "type": "integer" },
+                  "DestPort": { "type": "integer" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+PUT /winlogbeat-2024.07.11
+{
+  "settings": {
+    "index.default_pipeline": "ip-port-conversion-pipeline",
+    "index.number_of_shards": 1,
+    "index.number_of_replicas": 0
+  },
+  "mappings": {
+    "properties": {
+      "host": {
+        "properties": {
+          "ip": {
+            "type": "ip"
+          }
+        }
+      },
+      "winlog": {
+        "properties": {
+          "winlog": {
+            "properties": {
+              "event_data": {
+                "properties": {
+                  "SourceAddress": { "type": "ip" },
+                  "DestAddress": { "type": "ip" },
+                  "SourcePort": { "type": "integer" },
+                  "DestPort": { "type": "integer" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+
+#del old pipeline association
+PUT /temp-index/_settings
+{
+  "index.default_pipeline": null
+}
+
+# del old injest pipeline
+DELETE _ingest/pipeline/ip-port-conversion-pipeline
+
+
+# recreate ingest pipeline
+PUT _ingest/pipeline/ip-port-conversion-pipeline
+{
+  "description": "Convert IP addresses and ports",
+  "processors": [
+    {
+      "convert": {
+        "field": "winlog.winlog.event_data.SourceAddress",
+        "type": "ip"
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.winlog.event_data.DestAddress",
+        "type": "ip"
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.winlog.event_data.SourcePort",
+        "type": "integer"
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.winlog.event_data.DestPort",
+        "type": "integer"
+      }
+    }
+  ]
+}
+
+
+
+#Set default
+PUT /temp-index/_settings
+{
+  "index.default_pipeline": "ip-port-conversion-pipeline"
+}
+
+#verify and view mapping
+
+GET temp-index/_mapping
+
+#copy data from win to tmp
+POST _reindex
+{
+  "source": {
+    "index": "winlogbeat-2024.07.11"
+  },
+  "dest": {
+    "index": "temp-index"
+  }
+}
+
+# Abandoning the pipeline to presurve the old data and convert data types during the copying process by creating a ingest and index template. I am going to just create it gottogo for winlogbeat index
+################################################################
+################################################################
+
+#Stop log, turn off VM or service
+
+
+DELETE /winlogbeat-2024.07.11
+
+DELETE /_index_template/winlogbeat-template
+
+GET /_data_stream/_stats
+
+#Note i deleted the data stream with the GUI
+
+PUT /_index_template/winlogbeat_template
+{
+  "index_patterns": ["winlogbeat-*"],
+  "template": {
+    "settings": {
+      "index.number_of_shards": 1,
+      "index.number_of_replicas": 0,
+      "index.default_pipeline": "ip-port-conversion-pipeline"
+    },
+    "mappings": {
+      "properties": {
+        "winlog": {
+          "properties": {
+            "event_data": {
+              "properties": {
+                "SourceAddress": { "type": "ip" },
+                "DestAddress": { "type": "ip" },
+                "SourcePort": { "type": "integer" },
+                "DestPort": { "type": "integer" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "priority": 500
+}
+
+PUT _ingest/pipeline/ip-port-conversion-pipeline
+{
+  "description": "Convert IP addresses and ports",
+  "processors": [
+    {
+      "convert": {
+        "field": "winlog.event_data.SourceAddress",
+        "type": "ip"
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.event_data.DestAddress",
+        "type": "ip"
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.event_data.SourcePort",
+        "type": "integer"
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.event_data.DestPort",
+        "type": "integer"
+      }
+    }
+  ]
+}
+
+#Set default
+PUT /winlogbeat-*/_settings
+{
+  "index.default_pipeline": "ip-port-conversion-pipeline"
+}
+
+GET /_index_template/winlogbeat-*
+
+
+
+PUT /_data_stream/winlogbeat-*
+
+
+
+
+
+PUT _ingest/pipeline/ip-port-conversion-pipeline
+{
+  "description": "Convert IP addresses and ports",
+  "processors": [
+    {
+      "convert": {
+        "field": "host.ip",
+        "type": "ip"
+      }
+    },
+	  "convert": {
+        "field": "winlog.winlog.event_data.SourceAddress",
+        "type": "ip"
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.winlog.event_data.DestAddress",
+        "type": "ip"
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.winlog.event_data.SourcePort",
+        "type": "integer"
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.winlog.event_data.DestPort",
+        "type": "integer"
+      }
+    }
+  ]
+}
+
+
