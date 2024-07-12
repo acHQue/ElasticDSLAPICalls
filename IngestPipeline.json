@@ -1,0 +1,62 @@
+#Ingest pipe line sits between the index pipeline and the logstash pipeline.
+#The ingest pipeline can be referenced in the logstash pipeline too so logstash can tell elastic how data should parse and convert data types.
+#Converting ipaddress cannot be done with logstash. Elastic can only convert string IPs to actual IP data types.
+#Hense the need for an ingest pipeline. I have also found that port numbers are best suited as string. Handling them as number mean elastic tries to round them down or up. 
+#Elastic presents the ports differently from the orginal.
+
+
+PUT _ingest/pipeline/ip-port-conversion-pipeline-winlogbeat
+{
+  "description": "Convert IP addresses and ports for Winlogbeat data, handling missing fields",
+  "processors": [
+    {
+      "convert": {
+        "field": "host.ip",
+        "type": "ip",
+        "ignore_missing": true
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.event_data.SourceAddress",
+        "type": "ip",
+        "ignore_missing": true
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.event_data.DestAddress",
+        "type": "ip",
+        "ignore_missing": true
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.event_data.SourcePort",
+        "type": "integer",
+        "ignore_missing": true
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.event_data.DestPort",
+        "type": "integer",
+        "ignore_missing": true
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.process.pid",
+        "type": "integer",
+        "ignore_missing": true
+      }
+    },
+    {
+      "convert": {
+        "field": "winlog.process.thread.id",
+        "type": "integer",
+        "ignore_missing": true
+      }
+    }
+  ]
+}
